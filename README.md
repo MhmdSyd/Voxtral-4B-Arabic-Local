@@ -1,6 +1,10 @@
 # Voxtral Realtime Arabic (local)
 
 Arabic speech-to-text on your own GPU: live microphone and audio-file upload.
+
+<img width="2400" height="1200" alt="banner" src="https://github.com/user-attachments/assets/c55b0f95-f7b2-4665-b819-ff52e0070345" />
+
+
 One command starts everything.
 
 ```
