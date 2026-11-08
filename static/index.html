@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voxtral Realtime Arabic</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="alternate icon" type="image/png" href="/favicon.png">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FFF9E8; --grid: #F1E7C9; --card: #FFFBEE; --line: #E9DDB8;
+    --orange: #E66E00; --dot: #FF8000; --soft: #FFE9CF; --soft2: #FFF3DF;
+    --ink: #1c1c1c; --muted: #4B5563; --label: #6B7280; --danger: #C62828; --paper: #FFFFFF;
+    --sans: Arial, Helvetica, sans-serif;
+    --arabic: Cairo, "Segoe UI", Tahoma, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; min-height: 100vh; font-family: var(--sans); color: var(--ink);
+    background-color: var(--bg);
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 44px 44px;
+    display: flex; justify-content: center; padding: 48px 24px;
+  }
+  .card {
+    width: 100%; max-width: 920px; align-self: flex-start;
+    background: var(--card); border: 1px solid var(--line); border-radius: 4px;
+    box-shadow: 0 18px 40px rgba(120, 90, 20, .12);
+    padding: 32px 48px 40px; display: flex; flex-direction: column; gap: 24px;
+  }
+  .statusline { display: flex; justify-content: flex-end; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--dot); display: inline-block; }
+  .dot.busy { animation: pulse 1.2s ease-in-out infinite; }
+  .dot.err { background: var(--danger); }
+  .dot.idle { background: #9CA3AF; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  @media (prefers-reduced-motion: reduce) { .dot.busy, .spin, .indet i { animation: none !important; } }
+
+  header { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; margin-top: -8px; }
+  .mic { width: 72px; height: 72px; border-radius: 50%; background: var(--soft); box-shadow: 0 6px 14px rgba(230, 110, 0, .2); display: flex; align-items: center; justify-content: center; }
+  h1 { margin: 6px 0 0; font-size: clamp(34px, 7vw, 48px); line-height: 1.05; font-weight: 800; letter-spacing: -2px; }
+  .ar-title { font: 700 38px/1.3 var(--arabic); color: var(--orange); }
+  header p { margin: 0; max-width: 600px; font-size: 17px; line-height: 1.5; color: var(--muted); }
+
+  .tabs { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .tab { font: 700 16px var(--sans); display: inline-flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 22px 0 8px; border: 2px solid var(--orange); background: transparent; color: var(--ink); border-radius: 8px; cursor: pointer; }
+  .tab i { font-style: normal; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: var(--orange); color: #fff; }
+  .tab[aria-selected="true"] { background: var(--orange); color: #fff; }
+  .tab[aria-selected="true"] i { background: #fff; color: var(--orange); }
+  .tab:disabled { opacity: .45; cursor: default; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 0 0 -4px; width: 100%; }
+
+  .btn { font: 700 15px var(--sans); letter-spacing: .5px; border-radius: 8px; padding: 12px 20px; min-height: 44px; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; border: 2px solid var(--ink); background: transparent; color: var(--ink); }
+  .btn:hover:not(:disabled) { background: rgba(28, 28, 28, .06); }
+  .btn.main { background: var(--orange); border-color: var(--orange); color: #fff; font-size: 18px; text-transform: uppercase; padding: 14px 32px; }
+  .btn.main:hover:not(:disabled) { background: #cf6200; }
+  .btn.dark, .btn.main.dark { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .btn.main.dark:hover:not(:disabled) { background: #000; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  button:focus-visible, a.btn:focus-visible, .tx:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+  .view { display: flex; flex-direction: column; gap: 24px; }
+  .row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .lbl { font: 700 12px var(--sans); letter-spacing: 1.5px; color: var(--label); text-transform: uppercase; }
+  .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 24px; }
+  .tx { font: 500 19px/2 var(--arabic); word-wrap: break-word; min-height: 230px; max-height: 50vh; overflow-y: auto; }
+  .tx.small { font-size: 18px; min-height: 150px; }
+  .tx p { margin: 0 0 .75em; }
+  .tx p:last-child { margin-bottom: 0; }
+  .take + .take { margin-top: 1.1em; padding-top: 1.1em; border-top: 1px dashed var(--line); }
+  .spk { display: inline-block; direction: ltr; unicode-bidi: isolate; font: 700 13px/1.4 var(--sans); letter-spacing: .3px; padding: 1px 9px; border-radius: 12px; margin-inline-end: 8px; color: #fff; background: var(--orange); vertical-align: 2px; }
+  .spk.s1 { background: var(--ink); } .spk.s2 { background: #0F766E; } .spk.s3 { background: #6D28D9; } .spk.s4 { background: #1D4ED8; } .spk.s5 { background: #9A3412; }
+  .tx:empty::before { content: attr(data-placeholder); font: 400 16px/1.6 var(--sans); color: var(--label); }
+  .opt { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer; }
+  .opt input { width: 18px; height: 18px; accent-color: var(--orange); cursor: pointer; }
+  .opt.off { opacity: .55; cursor: default; } .opt.off input { cursor: default; }
+  .hint { font-size: 13px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .recs { display: flex; flex-direction: column; gap: 10px; padding: 8px 18px; }
+  .rec { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .rec:last-child { border-bottom: 0; }
+  .rec .nm { min-width: 150px; font-size: 14px; } .rec .nm b { display: block; } .rec .nm span { color: var(--muted); font-size: 13px; }
+  .rec audio { flex: 1; min-width: 220px; height: 36px; }
+  .btn.sm { font-size: 13px; padding: 6px 12px; min-height: 34px; text-decoration: none; }
+  .msg { min-height: 1.3em; font-size: 14px; color: var(--muted); }
+  .msg.err { color: var(--danger); font-weight: 700; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  /* live indicator */
+  .live-ind { display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 700; color: var(--muted); }
+  .bars { display: flex; align-items: center; gap: 3px; height: 32px; }
+  .bars span { width: 4px; height: 6px; background: var(--orange); border-radius: 2px; transition: height .08s; }
+  .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #9CA3AF; }
+  .on-air .rec-dot { background: var(--danger); }
+  .on-air { color: var(--ink); }
+
+  /* upload */
+  .drop { border: 2px dashed var(--orange); border-radius: 8px; background: var(--soft2); padding: 28px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .drop.over { background: var(--soft); border-style: solid; }
+  .drop .ic { width: 56px; height: 56px; border-radius: 50%; background: var(--soft); display: flex; align-items: center; justify-content: center; color: var(--orange); }
+  .drop .t { flex: 1; min-width: 200px; }
+  .drop .t b { font-size: 18px; display: block; }
+  .drop .t span { font-size: 14px; color: var(--muted); display: block; margin-top: 4px; }
+  .file { display: flex; align-items: center; gap: 14px; padding: 14px 18px; flex-wrap: wrap; }
+  .file .ext { width: 40px; height: 36px; background: var(--orange); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+  .file .nm { flex: 1; min-width: 140px; overflow: hidden; }
+  .file .nm b { display: block; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file .nm span { font-size: 13px; color: var(--muted); }
+  .chip { font-size: 13px; font-weight: 700; border: 2px solid var(--ink); padding: 4px 10px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; }
+  .chip.err { border-color: var(--danger); color: var(--danger); }
+  .spin { width: 12px; height: 12px; border: 2px solid var(--orange); border-top-color: transparent; border-radius: 50%; animation: rot .8s linear infinite; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  .indet { height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; flex-basis: 100%; }
+  .indet i { display: block; height: 6px; width: 35%; background: var(--orange); border-radius: 3px; animation: slide 1.2s ease-in-out infinite; }
+  @keyframes slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+
+  /* setup */
+  .step { display: flex; gap: 16px; align-items: center; padding: 20px 24px; }
+  .step .b { width: 40px; height: 40px; background: var(--orange); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+  .step.done .b { background: var(--ink); }
+  .step.error .b { background: var(--danger); }
+  .step.wait { opacity: .7; }
+  .step .c { flex: 1; min-width: 0; }
+  .step .h { display: flex; justify-content: space-between; gap: 12px; font-weight: 700; font-size: 16px; flex-wrap: wrap; }
+  .step .h span:last-child { font-size: 14px; color: var(--muted); font-weight: 400; }
+  .bar { height: 8px; background: var(--grid); border-radius: 4px; margin-top: 8px; }
+  .bar i { display: block; height: 8px; background: var(--orange); border-radius: 4px; transition: width .4s; }
+  .note { margin: 0; text-align: center; font-size: 14px; color: var(--muted); }
+  .errbox { border: 2px solid var(--danger); background: #FFF; border-radius: 6px; padding: 18px 22px; display: flex; flex-direction: column; gap: 12px; }
+  .errbox b { color: var(--danger); font-size: 16px; }
+  .errbox pre { margin: 0; white-space: pre-wrap; font: 13px/1.5 Consolas, monospace; color: var(--ink); background: var(--soft2); padding: 12px; border-radius: 4px; max-height: 220px; overflow: auto; }
+  @media (max-width: 640px) { body { padding: 16px 10px; } .card { padding: 24px 18px 28px; } .tx { font-size: 17px; } }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="statusline"><span id="pill">Starting...</span><span class="dot busy" id="dot"></span></div>
+
+  <header>
+    <div class="mic" aria-hidden="true">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#E66E00" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </div>
+    <h1>Voxtral Realtime Arabic</h1>
+    <div class="ar-title" lang="ar">العربية</div>
+    <p>Transcribe Arabic speech live from your microphone or from an audio file. Everything runs on this computer.</p>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-live" aria-selected="true" aria-controls="view-live" disabled><i>1</i>Live microphone</button>
+    <button class="tab" role="tab" id="tab-file" aria-selected="false" aria-controls="view-file" disabled><i>2</i>Upload audio file</button>
+  </div>
+  <hr>
+
+  <!-- Setup / errors -->
+  <section class="view" id="view-setup" aria-live="polite">
+    <div id="steps" class="view" style="gap:14px"></div>
+    <div class="errbox" id="errbox" hidden>
+      <b id="err-title"></b>
+      <pre id="err-hint" hidden></pre>
+      <pre id="err-log" hidden></pre>
+      <div><button class="btn main" id="retry" type="button" style="font-size:15px;padding:12px 24px">Retry</button></div>
+    </div>
+    <p class="note" id="setup-note">First start only. Files are saved in the models folder and reused next time.</p>
+  </section>
+
+  <!-- 1. Live -->
+  <section class="view" id="view-live" role="tabpanel" aria-labelledby="tab-live" hidden>
+    <div class="row">
+      <span class="lbl">Live transcript</span>
+      <span class="live-ind" id="live-ind"><span class="bars" id="bars" aria-hidden="true"></span><span class="rec-dot"></span><span id="live-label">Ready</span></span>
+    </div>
+    <div class="panel tx" id="live-out" tabindex="0" data-placeholder="Press Start and speak. The transcript appears here as you talk."></div>
+    <div class="row">
+      <button class="btn main" id="rec" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="rec-ic"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span id="rec-label">Start</span></button>
+      <div class="actions">
+        <button class="btn" data-act="copy" data-target="live-out" type="button">Copy</button>
+        <button class="btn" data-act="save" data-target="live-out" type="button">Save .txt</button>
+        <button class="btn" data-act="clear" data-target="live-out" type="button">Clear</button>
+      </div>
+    </div>
+    <div class="row" style="justify-content:flex-start;gap:16px">
+      <label class="opt"><input type="checkbox" class="spk-toggle"><span>Separate speakers</span></label>
+      <span class="hint spk-hint"></span><button class="btn sm spk-retry" type="button" hidden>Retry</button>
+    </div>
+    <div class="msg" id="live-msg" role="status"></div>
+    <div id="recs" hidden>
+      <div class="row" style="margin-bottom:10px"><span class="lbl">Recordings</span><span class="hint">Kept only while this tab is open</span></div>
+      <div class="panel recs" id="recs-list"></div>
+    </div>
+  </section>
+
+  <!-- 2. Upload -->
+  <section class="view" id="view-file" role="tabpanel" aria-labelledby="tab-file" hidden>
+    <div class="drop" id="drop">
+      <div class="ic" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg></div>
+      <div class="t"><b>Drop an audio file here, or browse</b><span>WAV, MP3, FLAC or OGG</span></div>
+      <button class="btn main" id="choose" type="button" style="font-size:15px;padding:12px 24px">Choose file</button>
+      <input type="file" id="file-input" accept="audio/*,.wav,.mp3,.flac,.ogg" hidden>
+    </div>
+    <div class="row" style="justify-content:flex-start;gap:16px">
+      <label class="opt"><input type="checkbox" class="spk-toggle"><span>Separate speakers</span></label>
+      <span class="hint spk-hint"></span><button class="btn sm spk-retry" type="button" hidden>Retry</button>
+    </div>
+    <div class="panel file" id="file-row" hidden>
+      <span class="ext" id="f-ext">MP3</span>
+      <div class="nm"><b id="f-name"></b><span id="f-size"></span></div>
+      <span class="chip" id="f-chip"></span>
+      <div class="indet" id="f-indet" hidden><i></i></div>
+    </div>
+    <div class="row"><span class="lbl">Transcript</span></div>
+    <div class="panel tx small" id="file-out" tabindex="0" data-placeholder="The transcript of your file appears here."></div>
+    <div class="actions" style="justify-content:flex-end">
+      <button class="btn" data-act="copy" data-target="file-out" type="button">Copy</button>
+      <button class="btn" data-act="save" data-target="file-out" type="button">Save .txt</button>
+      <button class="btn" data-act="clear" data-target="file-out" type="button">Clear</button>
+    </div>
+    <div class="msg" id="file-msg" role="status"></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmtBytes = (n) => n >= 2**30 ? (n / 2**30).toFixed(2) + " GB" : n >= 2**20 ? (n / 2**20).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+const fmtTime = (s) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+
+let isReady = false, busy = false, current = "live";
+
+/* ---------- status + setup screen ---------- */
+function setPill(text, kind) {
+  $("pill").textContent = text;
+  $("dot").className = "dot" + (kind ? " " + kind : "");
+}
+
+function stepHTML(n, label, detail, state, pct) {
+  const badge = state === "done" ? "&#10003;" : state === "error" ? "!" : n;
+  const bar = state === "run" && pct != null ? `<div class="bar"><i style="width:${pct}%"></i></div>` : "";
+  return `<div class="panel step ${state}"><span class="b">${badge}</span><div class="c"><div class="h"><span>${label}</span><span>${detail}</span></div>${bar}</div></div>`;
+}
+
+function renderSetup(s) {
+  const steps = [];
+  s.files.forEach((f, i) => {
+    let detail = "Waiting", pct = null;
+    if (f.status === "done") detail = fmtBytes(f.total) + ", done";
+    else if (f.status === "run") {
+      pct = f.total ? Math.round(f.downloaded / f.total * 100) : 0;
+      detail = f.total ? `${fmtBytes(f.downloaded)} of ${fmtBytes(f.total)}` : "Connecting...";
+    } else if (f.status === "error") detail = "Failed";
+    steps.push(stepHTML(i + 1, f.label, detail, f.status, pct));
+  });
+  const allDone = s.files.every((f) => f.status === "done");
+  const st = s.state === "starting" ? "run" : s.state === "error" && allDone ? "error" : "wait";
+  steps.push(stepHTML(3, "Start llama-server on the GPU", st === "run" ? "Loading the model..." : st === "error" ? "Failed" : "Waiting", st, st === "run" ? 100 : null));
+  $("steps").innerHTML = steps.join("");
+
+  const isErr = s.state === "error";
+  $("errbox").hidden = !isErr;
+  $("setup-note").hidden = isErr;
+  if (isErr) {
+    $("err-title").textContent = s.error || "Something went wrong.";
+    $("err-hint").hidden = !s.hint; $("err-hint").textContent = s.hint || "";
+    $("err-log").hidden = !s.log; $("err-log").textContent = s.log || "";
+  }
+}
+
+const USABLE = ["ready", "unloading", "sleeping", "waking"];
+function applyStatus(s) {
+  setSpeakerState(s.speakers);
+  if (USABLE.includes(s.state)) {
+    if (!isReady) { isReady = true; showView(current); }
+    if (s.state === "ready") setPill("Model ready · " + (s.gpu || s.model), "");
+    else if (s.state === "waking") setPill("Loading the model onto the GPU...", "busy");
+    else setPill("Model unloaded (idle) · loads when needed", "idle");
+    $("view-setup").hidden = true;
+    setTabsDisabled(busy);
+    return;
+  }
+  isReady = false;
+  $("view-live").hidden = $("view-file").hidden = true;
+  $("view-setup").hidden = false;
+  setTabsDisabled(true);
+  setPill(s.state === "error" ? "Setup needs attention" : "Setting up...", s.state === "error" ? "err" : "busy");
+  renderSetup(s);
+}
+
+async function poll() {
+  let delay = 700;
+  try {
+    const s = await (await fetch("/api/status")).json();
+    applyStatus(s);
+    if (s.state === "ready" || s.state === "sleeping") delay = 4000;
+  } catch (e) {
+    setPill("Cannot reach the app", "err");
+    delay = 2000;
+  }
+  setTimeout(poll, delay);
+}
+$("retry").addEventListener("click", async () => { await fetch("/api/retry", { method: "POST" }); });
+
+/* ---------- tabs ---------- */
+function setTabsDisabled(d) { $("tab-live").disabled = $("tab-file").disabled = d; }
+function showView(name) {
+  current = name;
+  if (!isReady) return;
+  $("view-live").hidden = name !== "live";
+  $("view-file").hidden = name !== "file";
+  $("tab-live").setAttribute("aria-selected", name === "live");
+  $("tab-file").setAttribute("aria-selected", name === "file");
+}
+$("tab-live").addEventListener("click", () => showView("live"));
+$("tab-file").addEventListener("click", () => showView("file"));
+function setBusy(b) { busy = b; setTabsDisabled(!isReady || b); refreshSpeakerUI(); }
+
+/* ---------- copy / save / clear ---------- */
+document.querySelectorAll("[data-act]").forEach((btn) => btn.addEventListener("click", async () => {
+  const tx = btn.dataset.target === "live-out" ? liveTx : fileTx, msg = tx.el.id === "live-out" ? $("live-msg") : $("file-msg");
+  if (btn.dataset.act === "clear") { tx.clear(); msg.textContent = ""; return; }
+  const text = tx.text();
+  if (!text.trim()) { msg.className = "msg"; msg.textContent = "Nothing to " + btn.dataset.act + " yet."; return; }
+  if (btn.dataset.act === "copy") {
+    try { await navigator.clipboard.writeText(text); msg.className = "msg"; msg.textContent = "Copied."; }
+    catch (e) { msg.className = "msg err"; msg.textContent = "Copy was blocked by the browser."; }
+  } else {
+    const d = new Date(), p = (n) => String(n).padStart(2, "0");
+    const name = `transcript-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.txt`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["\ufeff" + text], { type: "text/plain;charset=utf-8" }));
+    a.download = name; a.click(); URL.revokeObjectURL(a.href);
+    msg.className = "msg"; msg.textContent = "Saved " + name;
+  }
+}));
+
+/* ---------- transcript formatting (rule based) ----------
+   The model gives plain words. This adds punctuation and paragraphs from two signals:
+   1) pauses: the live view marks a pause between words (PAUSE_SENT / PAUSE_PARA below), and
+   2) wording: question words, exclamations, very long runs.
+   It is a best guess, not a language model. Existing punctuation from the model is kept. */
+const SENT = "\u2028", PARA = "\u2029";          // pause markers inside the raw text
+const PAUSE_SENT_MS = 1100, PAUSE_PARA_MS = 3000; // silence between words that ends a sentence / a paragraph
+const MAX_SENT_WORDS = 26, HARD_SENT_WORDS = 45;  // long runs without a pause are split
+const PARA_SENTENCES = 4, PARA_WORDS = 60;        // a paragraph never gets longer than this
+const Q_MARK_AR = "\u061F", COMMA_AR = "\u060C";  // ؟ and ،
+
+const HAS_AR = /[\u0600-\u06FF]/;
+const norm = (w) => w.replace(/[\u064B-\u065F\u0670\u0640]/g, "").replace(/[\u0623\u0625\u0622]/g, "\u0627").replace(/\u0649/g, "\u064A").replace(/\u0629/g, "\u0647").replace(/[.,!?\u061F\u060C\u061B:;\u2026"'()]/g, "");
+const wset = (s) => new Set(s.split(/\s+/).filter(Boolean).map(norm));
+
+// words are written the way norm() returns them (alef without hamza, ya for alef maqsura, ha for ta marbuta)
+const Q_START = wset("هل ماذا لماذا كيف كم متي اين اليس ليش ليه وين شلون شو ايش وش ويش فين ازاي امتي مين كام ايه قديش شنو شكون كيفاش واش علاش شحال");
+const Q_END = wset("فين وين ليه ليش مين ايه ايش امتي ازاي كام");
+const Q_TAGS = ["مش كده", "مش كدا", "مش كذا", "مو كذا", "مو هيك", "ولا لا", "ولا ايه", "ولا ايش", "اليس كذلك", "صح كده", "صح كدا"].map((t) => t.split(" ").map(norm).join(" "));
+const MA_SECOND = wset("هو هي هم هذا هذه ذا الذي التي الفرق السبب رايك رايكم معني المقصود الحل الهدف المشكله الامر");
+const EXCL = wset("رائع ممتاز مبروك ياه واو ياسلام احسنت برافو مذهل عظيم تهانينا");
+const EXCL_PHRASE = /(^| )(يا سلام|الحمد لله|سبحان الله|ما شاء الله|ماشاء الله|الله اكبر)( |$)/;
+const EN_Q = /^(what|why|how|when|where|who|whom|whose|which|do|does|did|can|could|would|will|is|are|was|were|should|shall|have|has)\b/i;
+const EXCL_MA = /^ما\s+ا(?:جمل|روع|حلي|حسن|سوا|صعب|سهل|عظم|كبر|ذكي)/;
+const STARTERS = wset("طيب تمام اوكي يلا خلاص اولا ثانيا ثالثا رابعا خامسا اخيرا بالنسبه شكرا");
+const BREAKERS = wset("ثم لكن ولكن بينما حيث لذلك بالتالي وبالتالي كذلك");
+const CONTRAST = wset("لكن ولكن بينما");
+const FILLERS = wset("طيب تمام اوكي نعم ايوه ايوا لا يعني اذن حسنا طبعا ماشي يلا خلاص");
+const TERMINAL = /[.!?\u061F\u2026]$/;
+
+function cleanText(t) {
+  return t.replace(/\s+/g, " ")
+    .replace(/\s+([\u060C\u061B.!?\u061F:,;\u2026])/g, "$1")
+    .replace(/([\u060C\u061B\u061F!?])(?=[^\s\u060C\u061B\u061F!?.)"'])/g, "$1 ")
+    .replace(/\.(?=[\u0600-\u06FF])/g, ". ")
+    .trim();
+}
+
+// one run of words with no pause marker inside -> sentences (the last one may still be open)
+function splitSentences(text) {
+  const words = text.split(" ").filter(Boolean), out = [];
+  let cur = [];
+  const flush = () => { if (cur.length) out.push(cur.join(" ")); cur = []; };
+  for (const w of words) {
+    const n = norm(w);
+    if (cur.length >= 8 && STARTERS.has(n)) flush();
+    else if (cur.length >= MAX_SENT_WORDS && BREAKERS.has(n)) flush();
+    else if (cur.length >= HARD_SENT_WORDS) flush();
+    if (cur.length >= 3 && CONTRAST.has(n) && !/[\u060C,.!?\u061F:;\u061B]$/.test(cur[cur.length - 1])) cur[cur.length - 1] += COMMA_AR;
+    cur.push(w);
+    if (TERMINAL.test(w) && !/\d\.$/.test(w)) flush();
+  }
+  flush();
+  return out;
+}
+
+function isQuestion(s) {
+  const ws = s.split(" ").map(norm).filter(Boolean);
+  if (!ws.length) return false;
+  const first = ws[0];
+  if (!HAS_AR.test(s)) return EN_Q.test(s.trim());
+  if (Q_START.has(first)) return true;
+  if (/^[\u0648\u0641]/.test(first) && first.length > 2 && Q_START.has(first.slice(1))) return true;
+  if (first === "ما" && ws[1] && MA_SECOND.has(ws[1])) return true;
+  if (ws.slice(0, 3).includes("هل")) return true;
+  if (ws.length > 1 && Q_END.has(ws[ws.length - 1])) return true;
+  const tail2 = ws.slice(-2).join(" ");
+  return Q_TAGS.includes(tail2);
+}
+function isExclamation(s) {
+  const ws = s.split(" ");
+  if (ws.length > 5) return false;
+  const n = ws.map(norm);
+  const j = n.join(" ");
+  return EXCL_MA.test(j) || EXCL_PHRASE.test(j) || n.some((w) => EXCL.has(w));
+}
+
+function arabicMarks(s) {  // model output may use , ? ; -> Arabic marks inside Arabic sentences
+  return HAS_AR.test(s) ? s.replace(/\?/g, Q_MARK_AR).replace(/,(?!\d)|(?<!\d),/g, COMMA_AR).replace(/;/g, "\u061B") : s;
+}
+function terminate(s) {
+  s = arabicMarks(s.trim());
+  if (TERMINAL.test(s)) return s;
+  s = s.replace(/[\u060C,:;\u061B]+$/, "");
+  const ar = HAS_AR.test(s);
+  if (isQuestion(s)) return s + (ar ? Q_MARK_AR : "?");
+  if (isExclamation(s)) return s + "!";
+  return s + ".";
+}
+
+// raw text (with pause markers) -> array of paragraphs. final=false keeps the sentence being spoken unfinished.
+function formatTranscript(raw, final) {
+  const open = !final && !/[\u2028\u2029]\s*$/.test(raw);
+  const paraTexts = raw.split(PARA).map((p) => p.trim()).filter((p) => p.replace(/\u2028/g, "").trim());
+  const paragraphs = [];
+  paraTexts.forEach((ptxt, pi) => {
+    const units = ptxt.split(SENT).map(cleanText).filter(Boolean);
+    const sentences = [];
+    let carry = "";
+    units.forEach((u, ui) => {
+      const last = pi === paraTexts.length - 1 && ui === units.length - 1;
+      const words = u.split(" ");
+      if (!last && words.length <= 2 && words.every((w) => FILLERS.has(norm(w))) && !TERMINAL.test(u)) {
+        carry += u.replace(/[\u060C,]+$/, "") + COMMA_AR + " ";  // "نعم،" + next sentence
+        return;
+      }
+      const parts = splitSentences(carry + u);
+      carry = "";
+      parts.forEach((s, si) => {
+        const isOpen = open && last && si === parts.length - 1;
+        sentences.push(isOpen ? arabicMarks(s) : terminate(s));
+      });
+    });
+    if (carry) sentences.push(terminate(carry.trim()));
+    let cur = [], n = 0;
+    sentences.forEach((s) => {
+      cur.push(s); n += s.split(" ").length;
+      if (cur.length >= PARA_SENTENCES || n >= PARA_WORDS) { paragraphs.push(cur.join(" ")); cur = []; n = 0; }
+    });
+    if (cur.length) paragraphs.push(cur.join(" "));
+  });
+  return paragraphs;
+}
+
+
+/* ---------- transcript view: one block ("take") per recording or file ---------- */
+class Transcript {
+  constructor(el, key) { this.el = el; this.key = key; this.takes = []; this.queued = new Set(); }
+  add(data = {}) {
+    const take = { raw: "", turns: null, done: false, lastAt: null, ...data, dom: document.createElement("div") };
+    take.dom.className = "take";
+    this.takes.push(take); this.el.appendChild(take.dom); this.draw(take);
+    return take;
+  }
+  remove(take) { take.dom.remove(); this.takes = this.takes.filter((t) => t !== take); this.persist(); }
+  clear() { this.takes = []; this.el.replaceChildren(); this.persist(); }
+  // the paragraphs of one take: [{speaker, text}] (speaker is null without speaker separation)
+  blocks(take) {
+    if (take.turns) {
+      const out = [];
+      for (const t of take.turns) {
+        const text = formatTranscript(t.text, true).join(" ");
+        if (!text) continue;
+        if (out.length && out[out.length - 1].speaker === t.speaker) out[out.length - 1].text += " " + text;
+        else out.push({ speaker: t.speaker, text });
+      }
+      return out;
+    }
+    return formatTranscript(take.raw, take.done).map((text) => ({ speaker: null, text }));
+  }
+  draw(take) {
+    const stick = this.el.scrollTop + this.el.clientHeight >= this.el.scrollHeight - 40;
+    take.dom.replaceChildren(...this.blocks(take).map((b) => {
+      const p = document.createElement("p");
+      p.dir = HAS_AR.test(b.text) ? "rtl" : "ltr";
+      if (b.speaker) {
+        const l = document.createElement("span");
+        l.className = "spk s" + ((b.speaker - 1) % 6); l.textContent = "Speaker " + b.speaker + ":";
+        p.append(l, " ");
+      }
+      p.append(b.text);
+      return p;
+    }));
+    if (stick) this.el.scrollTop = this.el.scrollHeight;
+  }
+  redraw(take) {  // at most once per frame, even when words arrive faster
+    if (this.queued.has(take)) return;
+    this.queued.add(take);
+    requestAnimationFrame(() => { this.queued.delete(take); this.draw(take); });
+  }
+  text() {
+    return this.takes.map((t) => this.blocks(t).map((b) => (b.speaker ? "Speaker " + b.speaker + ": " : "") + b.text)
+      .join(t.turns ? "\n" : "\n\n")).filter(Boolean).join("\n\n");
+  }
+  // survives a page refresh in the same tab; gone when the tab is closed (sessionStorage)
+  persist() {
+    try { sessionStorage.setItem(this.key, JSON.stringify(this.takes.map((t) => ({ raw: t.raw, turns: t.turns, done: true, recId: t.recId })))); } catch (e) { /* storage full or blocked */ }
+  }
+  restore() {
+    try { (JSON.parse(sessionStorage.getItem(this.key) || "[]")).forEach((d) => this.add(d)); } catch (e) { /* ignore */ }
+  }
+}
+const liveTx = new Transcript($("live-out"), "tx-live"), fileTx = new Transcript($("file-out"), "tx-file");
+liveTx.restore(); fileTx.restore();
+
+/* ---------- tab session: recordings live as long as this tab is open ---------- */
+let sid = null, sessSock = null, sessRetry = 0;
+const sessionReady = (async () => {
+  const mk = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2, 12));
+  sid = sessionStorage.getItem("sid");
+  const bc = "BroadcastChannel" in window ? new BroadcastChannel("voxtral-tabs") : null;
+  if (sid && bc) {  // a duplicated tab copies sessionStorage: if another tab already uses this id, take a new one
+    const taken = await new Promise((res) => {
+      const t = setTimeout(() => res(false), 150);
+      bc.addEventListener("message", (e) => { if (e.data && e.data.t === "here" && e.data.sid === sid) { clearTimeout(t); res(true); } });
+      bc.postMessage({ t: "who", sid });
+    });
+    if (taken) sid = null;
+  }
+  if (!sid) { sid = mk(); sessionStorage.setItem("sid", sid); }
+  if (bc) bc.addEventListener("message", (e) => { if (e.data && e.data.t === "who" && e.data.sid === sid) bc.postMessage({ t: "here", sid }); });
+  connectSession();
+})();
+function connectSession() {
+  sessSock = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/session?sid=${sid}`);
+  sessSock.onopen = () => { sessRetry = 0; };
+  sessSock.onmessage = (e) => { const m = JSON.parse(e.data); if (m.type === "session") renderRecs(m.recordings); };
+  sessSock.onclose = () => { sessSock = null; setTimeout(connectSession, Math.min(1000 * 2 ** sessRetry++, 10000)); };
+}
+const recUrl = (id) => `/api/sessions/${sid}/recordings/${id}/audio`;
+function renderRecs(list) {
+  const box = $("recs-list"), keep = new Set(list.map((r) => r.id));
+  [...box.children].forEach((n) => { if (!keep.has(n.dataset.id)) n.remove(); });
+  for (const r of list) if (!box.querySelector(`[data-id="${r.id}"]`)) box.appendChild(recNode(r));  // existing rows stay, so playback is not interrupted
+  $("recs").hidden = !list.length;
+}
+function recNode(r) {
+  const n = document.createElement("div"); n.className = "rec"; n.dataset.id = r.id;
+  const when = new Date(r.created * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const nm = document.createElement("div"); nm.className = "nm";
+  nm.innerHTML = "<b></b><span></span>";
+  nm.firstChild.textContent = r.name; nm.lastChild.textContent = `${fmtTime(Math.round(r.seconds))} · ${fmtBytes(r.size)} · ${when}`;
+  const au = document.createElement("audio"); au.controls = true; au.preload = "metadata"; au.src = recUrl(r.id);
+  const dl = document.createElement("a"); dl.className = "btn sm"; dl.textContent = "Download"; dl.href = recUrl(r.id) + "?download=1";
+  const del = document.createElement("button"); del.className = "btn sm"; del.type = "button"; del.textContent = "Delete";
+  del.addEventListener("click", async () => { await fetch(`/api/sessions/${sid}/recordings/${r.id}`, { method: "DELETE" }); n.remove(); $("recs").hidden = !$("recs-list").children.length; });
+  n.append(nm, au, dl, del);
+  return n;
+}
+const stopAudio = () => document.querySelectorAll("#recs-list audio").forEach((a) => a.pause());
+
+/* ---------- speaker separation option ---------- */
+let spkOn = sessionStorage.getItem("spk") === "1", spkInfo = { state: "preparing", message: "" };
+const spkReady = () => spkInfo.state === "ready";
+function setSpeakerState(info) { if (info) { spkInfo = info; refreshSpeakerUI(); } }
+function refreshSpeakerUI() {
+  document.querySelectorAll(".spk-toggle").forEach((c) => {
+    c.checked = spkOn && spkReady(); c.disabled = !spkReady() || busy;
+    c.parentElement.classList.toggle("off", c.disabled);
+  });
+  const hint = spkReady() ? (spkOn ? "Speakers are identified when the recording or file is done." : "")
+    : (spkInfo.message || "Preparing speaker models...");
+  document.querySelectorAll(".spk-hint").forEach((h) => { h.textContent = hint; });
+  document.querySelectorAll(".spk-retry").forEach((b) => { b.hidden = spkInfo.state !== "unavailable"; });
+}
+document.querySelectorAll(".spk-retry").forEach((b) => b.addEventListener("click", async () => {
+  spkInfo = { state: "preparing", message: "Checking the speaker models..." }; refreshSpeakerUI();
+  await fetch("/api/speakers/retry", { method: "POST" });
+}));
+document.querySelectorAll(".spk-toggle").forEach((c) => c.addEventListener("change", () => {
+  spkOn = c.checked; sessionStorage.setItem("spk", spkOn ? "1" : "0"); refreshSpeakerUI();
+}));
+const wantSpeakers = () => spkOn && spkReady();
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function pollJob(id, onStep) {
+  for (;;) {
+    const r = await fetch("/api/jobs/" + id);
+    if (!r.ok) throw new Error("Lost track of the speaker job.");
+    const j = await r.json();
+    if (j.state !== "running") { if (j.state === "error") throw new Error(j.error || "Speaker separation failed."); return j.result; }
+    onStep(j.step === "diarizing" ? `Finding who is speaking... ${j.pct}%`
+      : j.step === "loading" ? "Loading the model onto the GPU..."
+      : `Transcribing speaker turns ${j.done} of ${j.total}...`);
+    await sleep(700);
+  }
+}
+
+/* ---------- live microphone ---------- */
+const workletSource = `
+class Down extends AudioWorkletProcessor {
+  constructor() { super(); this.ratio = sampleRate / 16000; this.acc = 0; this.n = 0; this.t = 0; this.out = []; }
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (!ch) return true;
+    for (let i = 0; i < ch.length; i++) {
+      this.acc += ch[i]; this.n++; this.t++;
+      if (this.t >= this.ratio) {
+        this.out.push(this.acc / this.n); this.acc = 0; this.n = 0; this.t -= this.ratio;
+        if (this.out.length >= 1600) {
+          const pcm = new Int16Array(this.out.length);
+          for (let k = 0; k < pcm.length; k++) { const s = Math.max(-1, Math.min(1, this.out[k])); pcm[k] = s < 0 ? s * 32768 : s * 32767; }
+          this.port.postMessage(pcm.buffer, [pcm.buffer]);
+          this.out = [];
+        }
+      }
+    }
+    return true;
+  }
+}
+registerProcessor("down", Down);`;
+
+const NBARS = 9;
+$("bars").innerHTML = "<span></span>".repeat(NBARS);
+const barEls = [...$("bars").children];
+let ws = null, ctx = null, mic = null, node = null, analyser = null, raf = 0, timer = 0, t0 = 0, live = false;
+
+function liveMsg(t, err) { const m = $("live-msg"); m.textContent = t; m.className = "msg" + (err ? " err" : ""); }
+function setLive(on) {
+  live = on;
+  $("rec").classList.toggle("dark", on);
+  $("rec-label").textContent = on ? "Stop" : "Start";
+  $("rec-ic").innerHTML = on ? '<rect x="6" y="6" width="12" height="12" fill="currentColor"/>' : '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>';
+  $("live-ind").classList.toggle("on-air", on);
+  setBusy(on);
+}
+function meter() {
+  if (!analyser) return;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(data);
+  const per = Math.floor(data.length * 0.5 / NBARS);
+  barEls.forEach((b, i) => {
+    let sum = 0; for (let k = 0; k < per; k++) sum += data[i * per + k];
+    b.style.height = Math.max(6, Math.min(32, (sum / per) / 255 * 44)) + "px";
+  });
+  raf = requestAnimationFrame(meter);
+}
+function releaseMic() {
+  cancelAnimationFrame(raf); clearInterval(timer);
+  barEls.forEach((b) => (b.style.height = "6px"));
+  if (node) { node.disconnect(); node = null; }
+  if (mic) { mic.getTracks().forEach((t) => t.stop()); mic = null; }
+  if (ctx) { ctx.close(); ctx = null; }
+  analyser = null;
+}
+async function startMic() {
+  mic = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  ctx = new AudioContext();
+  await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([workletSource], { type: "application/javascript" })));
+  const src = ctx.createMediaStreamSource(mic);
+  node = new AudioWorkletNode(ctx, "down");
+  node.port.onmessage = (e) => { if (ws && ws.readyState === WebSocket.OPEN) ws.send(e.data); };
+  analyser = ctx.createAnalyser(); analyser.fftSize = 256;
+  const mute = ctx.createGain(); mute.gain.value = 0;
+  src.connect(analyser);
+  src.connect(node).connect(mute).connect(ctx.destination);
+  meter();
+}
+let take = null;
+function pauseMarks(t, now) {  // silence between words ends a sentence, a longer one a paragraph
+  if (t.lastAt == null || !t.raw) return false;
+  const gap = now - t.lastAt, end = t.raw.slice(-1);
+  if (gap >= PAUSE_PARA_MS && end !== PARA) { t.raw = t.raw.replace(/\u2028$/, "") + PARA; return true; }
+  if (gap >= PAUSE_SENT_MS && end !== SENT && end !== PARA) { t.raw += SENT; return true; }
+  return false;
+}
+async function startLive() {
+  await sessionReady;
+  liveMsg("Connecting...");
+  $("rec").disabled = true; stopAudio();
+  take = liveTx.add(); const myTake = take;
+  let recorded = false;
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?sid=${sid}`);
+  ws.onmessage = async (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === "loading") {
+      liveMsg("Loading the model onto the GPU... this takes a few seconds."); $("live-label").textContent = "Loading model...";
+    } else if (m.type === "ready") {
+      try {
+        await startMic();
+        setLive(true); $("rec").disabled = false;
+        t0 = Date.now(); $("live-label").textContent = "Listening 00:00";
+        timer = setInterval(() => {
+          $("live-label").textContent = "Listening " + fmtTime(Math.floor((Date.now() - t0) / 1000));
+          if (pauseMarks(myTake, performance.now())) liveTx.redraw(myTake);
+        }, 250);
+        liveMsg("");
+      } catch (err) {
+        liveMsg("Microphone unavailable: " + err.message, true);
+        releaseMic(); ws.close();
+      }
+    } else if (m.type === "text") {
+      const now = performance.now();
+      pauseMarks(myTake, now);
+      myTake.raw += m.text; myTake.lastAt = now;
+      liveTx.redraw(myTake);
+    } else if (m.type === "recording") {
+      myTake.recId = m.recording.id; recorded = true;
+    } else if (m.type === "error") {
+      liveMsg(m.message, true);
+    } else if (m.type === "done") {
+      liveMsg("Finished."); myTake.done = true; liveTx.draw(myTake); ws.close();
+    }
+  };
+  ws.onerror = () => liveMsg("Could not reach the app.", true);
+  ws.onclose = () => {
+    releaseMic(); setLive(false); $("rec").disabled = false; $("live-label").textContent = "Ready"; ws = null;
+    myTake.done = true;
+    if (!myTake.raw.trim()) { liveTx.remove(myTake); take = null; } else { liveTx.draw(myTake); liveTx.persist(); }
+    if (recorded && myTake.raw.trim() && wantSpeakers()) liveSpeakers(myTake);
+  };
+}
+async function liveSpeakers(t) {
+  setBusy(true); $("live-label").textContent = "Identifying speakers...";
+  try {
+    const r = await fetch(`/api/sessions/${sid}/recordings/${t.recId}/speakers`, { method: "POST" });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.detail || "Server returned " + r.status);
+    const res = await pollJob(body.job, (txt) => liveMsg(txt));
+    if (res.turns.length) { t.turns = res.turns; liveTx.draw(t); liveTx.persist(); }
+    liveMsg(res.turns.length ? `Done. ${res.speakers} speaker${res.speakers === 1 ? "" : "s"} found.` : "No speech was found to separate.");
+  } catch (err) { liveMsg(err.message + " The transcript is shown without speakers.", true); }
+  finally { setBusy(false); $("live-label").textContent = "Ready"; }
+}
+function stopLive() {
+  releaseMic();
+  $("rec").disabled = true; $("live-label").textContent = "Finishing...";
+  liveMsg("Finishing...");
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send("stop");
+}
+$("rec").addEventListener("click", () => (live ? stopLive() : startLive()));
+
+/* ---------- upload a file ---------- */
+const drop = $("drop"), input = $("file-input");
+$("choose").addEventListener("click", () => input.click());
+input.addEventListener("change", () => { if (input.files[0]) handleFile(input.files[0]); input.value = ""; });
+["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => { const f = e.dataTransfer.files[0]; if (f && !busy) handleFile(f); });
+
+function fileMsg(t, err) { const m = $("file-msg"); m.textContent = t; m.className = "msg" + (err ? " err" : ""); }
+function chip(text, kind, spinning) {
+  const c = $("f-chip");
+  c.className = "chip" + (kind ? " " + kind : "");
+  c.innerHTML = (spinning ? '<span class="spin"></span>' : "") + text;
+}
+async function handleFile(f) {
+  if (busy) return;
+  await sessionReady;
+  const withSpk = wantSpeakers();
+  setBusy(true); fileMsg("");
+  $("file-row").hidden = false; $("f-indet").hidden = false;
+  $("f-name").textContent = f.name; $("f-size").textContent = fmtBytes(f.size);
+  $("f-ext").textContent = (f.name.split(".").pop() || "audio").slice(0, 4).toUpperCase();
+  chip(withSpk ? "Identifying speakers..." : "Transcribing...", "", true);
+  try {
+    const form = new FormData(); form.append("file", f);
+    const res = await fetch(`/transcribe?speakers=${withSpk ? 1 : 0}&sid=${sid}`, { method: "POST", body: form });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || "Server returned " + res.status);
+    let t;
+    if (withSpk) {
+      const out = await pollJob(body.job, (txt) => chip(txt, "", true));
+      if (!out.turns.length) fileMsg("No speech was found in this file.");
+      else { t = fileTx.add({ turns: out.turns, done: true }); fileMsg(`${out.speakers} speaker${out.speakers === 1 ? "" : "s"} found.`); }
+    } else {
+      if (!body.text) fileMsg("No speech was found in this file.");
+      else t = fileTx.add({ raw: body.text, done: true });
+    }
+    if (t) { fileTx.persist(); fileTx.el.scrollTop = fileTx.el.scrollHeight; }
+    chip("Transcribed", "");
+  } catch (err) {
+    chip("Failed", "err"); fileMsg(err.message, true);
+  } finally {
+    $("f-indet").hidden = true; setBusy(false);
+  }
+}
+
+refreshSpeakerUI();
+setTabsDisabled(true);
+poll();
+</script>
+</body>
+</html>
